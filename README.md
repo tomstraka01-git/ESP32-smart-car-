@@ -9,17 +9,17 @@ plays a **buzzer warning when the battery is low**.
 
 ---
 
-## ✨ Features
+##  Features
 
-- 📱 Control the car using WiFi (no app needed!)
-- 🔋 Live battery voltage and percentage
-- ⚠️ Low battery warning with buzzer
-- ⬆️⬇️⬅️➡️ Forward, Backward, Left, Right
-- 🔌 Rechargeable battery system
+-  Control the car using WiFi (no app needed!)
+-  Live battery voltage and percentage
+-  Low battery warning with buzzer
+-  Forward, Backward, Left, Right
+
 
 ---
 
-## 🧠 How It Works (Simple Explanation)
+##  How It Works 
 
 1. The **ESP32 creates its own WiFi network**
 2. You connect your phone to that WiFi
@@ -30,17 +30,16 @@ plays a **buzzer warning when the battery is low**.
 
 ---
 
-## 📡 WiFi Details
+##  WiFi Details
 
-| Setting | Value |
-|------|------|
+
 | WiFi Name | `ESP32_CAR` |
 | Password | `12345678` |
 | Website | `192.168.4.1` |
 
 ---
 
-## 🔋 Battery Monitoring
+##  Battery Monitoring
 
 - Uses a **voltage divider**
 - Reads voltage from ADC pin `GPIO 34`
@@ -51,7 +50,7 @@ plays a **buzzer warning when the battery is low**.
 
 ---
 
-## 🧩 Components Used
+##  Components Used
 
 - 4× Geared DC motors with wheels
 - 2× L298N motor driver modules
@@ -66,7 +65,7 @@ plays a **buzzer warning when the battery is low**.
 
 ---
 
-## 🔌 Pin Connections
+##  Pin Connections
 
 ### Motor Driver Pins
 
@@ -88,7 +87,7 @@ plays a **buzzer warning when the battery is low**.
 
 ---
 
-## ▶️ How to Run the Project
+##  How to Run the Project
 
 1. Install **Arduino IDE**
 2. Install **ESP32 board support**
