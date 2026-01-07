@@ -33,6 +33,8 @@ plays a **buzzer warning when the battery is low**.
 ##  WiFi Details
 
 
+| Setting | Value |
+|------|------|
 | WiFi Name | `ESP32_CAR` |
 | Password | `12345678` |
 | Website | `192.168.4.1` |
@@ -98,3 +100,11 @@ plays a **buzzer warning when the battery is low**.
 5. Upload the code
 6. Connect phone to **ESP32_CAR**
 7. Open browser and go to:
+192.168.4.1
+
+## Safety
+
+1. do not short wires!!
+2. set the correct voltage
+3. be careful around the li-po battery
+4. turn power off when wiring
