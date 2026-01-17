@@ -14,7 +14,28 @@ bool buzzerON = false;
 #define IN1 26
 #define IN2 27
 #define IN3 14
-#define IN4 12
+#define IN4 33
+
+#define IN5 19
+#define IN6 21
+#define IN7 22
+#define IN8 23
+
+const int ENA1 = 25; 
+const int ENB1 = 14; 
+
+const int ENA2 = 4;  
+const int ENB2 = 5;  
+
+const int freq = 1000;     
+const int resolution = 8; 
+
+const int M1_CH = 0;
+const int M2_CH = 1;
+const int M3_CH = 2;
+const int M4_CH = 3;
+
+int defaultSpeed = 128; 
 
 WebServer server(80);
 
@@ -57,40 +78,96 @@ void readBatteryLevel() {
 }
 
 
-void stopMotors() {
+void stopMotors(int speedM1, int speedM2, int speedM3, int speedM4) {
   digitalWrite(IN1, LOW);
   digitalWrite(IN2, LOW);
   digitalWrite(IN3, LOW);
   digitalWrite(IN4, LOW);
+
+  digitalWrite(IN5, LOW);
+  digitalWrite(IN6, LOW);
+  digitalWrite(IN7, LOW);
+  digitalWrite(IN8, LOW);
+
+  ledcWrite(M1_CH, speedM1);
+  ledcWrite(M2_CH, speedM2);
+  ledcWrite(M3_CH, speedM3);
+  ledcWrite(M4_CH, speedM4);
 }
 
-void forward() {
+void forward(int speedM1, int speedM2, int speedM3, int speedM4) {
   digitalWrite(IN1, HIGH);
   digitalWrite(IN2, LOW);
   digitalWrite(IN3, HIGH);
   digitalWrite(IN4, LOW);
+
+  digitalWrite(IN5, HIGH);
+  digitalWrite(IN6, LOW);
+  digitalWrite(IN7, HIGH);
+  digitalWrite(IN8, LOW);
+
+  ledcWrite(M1_CH, speedM1);
+  ledcWrite(M2_CH, speedM2);
+  ledcWrite(M3_CH, speedM3);
+  ledcWrite(M4_CH, speedM4);
 }
 
-void backward() {
+void backward(int speedM1, int speedM2, int speedM3, int speedM4) {
   digitalWrite(IN1, LOW);
   digitalWrite(IN2, HIGH);
   digitalWrite(IN3, LOW);
   digitalWrite(IN4, HIGH);
+
+  digitalWrite(IN5, LOW);
+  digitalWrite(IN6, HIGH);
+  digitalWrite(IN7, LOW);
+  digitalWrite(IN8, HIGH);
+
+  ledcWrite(M1_CH, speedM1);
+  ledcWrite(M2_CH, speedM2);
+  ledcWrite(M3_CH, speedM3);
+  ledcWrite(M4_CH, speedM4);
 }
 
-void left() {
+void right(int speedM1, int speedM2, int speedM3, int speedM4) {
+
+  digitalWrite(IN1, HIGH);   
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+
+  // RIGHT side → forward
+  digitalWrite(IN5, LOW);
+  digitalWrite(IN6, HIGH);
+  digitalWrite(IN7, HIGH);
+  digitalWrite(IN8, LOW);
+
+  ledcWrite(M1_CH, speedM1);
+  ledcWrite(M2_CH, speedM2);
+  ledcWrite(M3_CH, speedM3);
+  ledcWrite(M4_CH, speedM4);
+}
+
+
+void left(int speedM1, int speedM2, int speedM3, int speedM4) {
+ 
   digitalWrite(IN1, LOW);
   digitalWrite(IN2, HIGH);
   digitalWrite(IN3, HIGH);
   digitalWrite(IN4, LOW);
+
+  
+  digitalWrite(IN5, HIGH);
+  digitalWrite(IN6, LOW);
+  digitalWrite(IN7, LOW);
+  digitalWrite(IN8, HIGH);
+  
+  ledcWrite(M1_CH, speedM1);
+  ledcWrite(M2_CH, speedM2);
+  ledcWrite(M3_CH, speedM3);
+  ledcWrite(M4_CH, speedM4);
 }
 
-void right() {
-  digitalWrite(IN1, HIGH);
-  digitalWrite(IN2, LOW);
-  digitalWrite(IN3, LOW);
-  digitalWrite(IN4, HIGH);
-}
 
 
 void handleRoot() {
@@ -135,6 +212,17 @@ setInterval(() => {
     });
 }, 500);
 </script>
+<h3>Motor Speed</h3>
+<input type="range" min="0" max="255" value="128" id="speedSlider" oninput="updateSpeed(this.value)">
+<p>Speed: <span id="speedValue">128</span></p>
+
+<script>
+function updateSpeed(val) {
+  document.getElementById('speedValue').innerText = val;
+  fetch('/setSpeed?value=' + val); // send to ESP32
+}
+</script>
+
 
 </body>
 </html>
@@ -145,6 +233,7 @@ setInterval(() => {
 
 
 void setupServer() {
+  
   server.on("/", handleRoot);
 
   server.on("/battery", []() {
@@ -156,11 +245,37 @@ void setupServer() {
     server.send(200, "application/json", json);
   });
 
-  server.on("/forward", []() { forward(); server.send(200); });
-  server.on("/backward", []() { backward(); server.send(200); });
-  server.on("/left", []() { left(); server.send(200); });
-  server.on("/right", []() { right(); server.send(200); });
-  server.on("/stop", []() { stopMotors(); server.send(200); });
+  server.on("/setSpeed", []() {
+    if(server.hasArg("value")) {
+      defaultSpeed = constrain(server.arg("value").toInt(), 0, 255);
+  }
+
+  server.send(200);
+});
+
+
+
+server.on("/forward", []() { 
+  forward(defaultSpeed, defaultSpeed, defaultSpeed, defaultSpeed); 
+  server.send(200); 
+});
+server.on("/backward", []() { 
+  backward(defaultSpeed, defaultSpeed, defaultSpeed, defaultSpeed); 
+  server.send(200); 
+});
+server.on("/left", []() { 
+  left(defaultSpeed, defaultSpeed, defaultSpeed, defaultSpeed); 
+  server.send(200); 
+});
+server.on("/right", []() { 
+  right(defaultSpeed, defaultSpeed, defaultSpeed, defaultSpeed); 
+  server.send(200); 
+});
+server.on("/stop", []() { 
+  stopMotors(0,0,0,0); 
+  server.send(200); 
+});
+
 
   server.begin();
 }
@@ -174,6 +289,22 @@ void setup() {
   pinMode(IN2, OUTPUT);
   pinMode(IN3, OUTPUT);
   pinMode(IN4, OUTPUT);
+
+  pinMode(IN5, OUTPUT);
+  pinMode(IN6, OUTPUT);
+  pinMode(IN7, OUTPUT);
+  pinMode(IN8, OUTPUT);
+    
+  ledcSetup(M1_CH, 1000, 8);
+  ledcSetup(M2_CH, 1000, 8);
+  ledcSetup(M3_CH, 1000, 8);
+  ledcSetup(M4_CH, 1000, 8);
+
+  ledcAttachPin(ENA1, M1_CH);
+  ledcAttachPin(ENB1, M2_CH);
+  ledcAttachPin(ENA2, M3_CH);
+  ledcAttachPin(ENB2, M4_CH);
+
 
   stopMotors();
 
