@@ -13,7 +13,7 @@ bool buzzerON = false;
 
 #define IN1 26
 #define IN2 27
-#define IN3 14
+#define IN3 32   
 #define IN4 33
 
 #define IN5 19
@@ -21,11 +21,13 @@ bool buzzerON = false;
 #define IN7 22
 #define IN8 23
 
-const int ENA1 = 25; 
-const int ENB1 = 14; 
 
-const int ENA2 = 4;  
-const int ENB2 = 5;  
+const int ENA1 = 25;  
+const int ENB1 = 16;  
+
+const int ENA2 = 17;   
+const int ENB2 = 18;   
+
 
 const int freq = 1000;     
 const int resolution = 8; 
@@ -77,8 +79,7 @@ void readBatteryLevel() {
   Serial.printf("Battery: %.2f V | %d %%\n", currentBatteryVoltage, batteryPercent);
 }
 
-
-void stopMotors(int speedM1, int speedM2, int speedM3, int speedM4) {
+void stopMotors() {
   digitalWrite(IN1, LOW);
   digitalWrite(IN2, LOW);
   digitalWrite(IN3, LOW);
@@ -89,47 +90,55 @@ void stopMotors(int speedM1, int speedM2, int speedM3, int speedM4) {
   digitalWrite(IN7, LOW);
   digitalWrite(IN8, LOW);
 
-  ledcWrite(M1_CH, speedM1);
-  ledcWrite(M2_CH, speedM2);
-  ledcWrite(M3_CH, speedM3);
-  ledcWrite(M4_CH, speedM4);
+  ledcWrite(ENA1, 0);
+  ledcWrite(ENB1, 0);
+  ledcWrite(ENA2, 0);
+  ledcWrite(ENB2, 0);
 }
 
+
 void forward(int speedM1, int speedM2, int speedM3, int speedM4) {
+
   digitalWrite(IN1, HIGH);
   digitalWrite(IN2, LOW);
   digitalWrite(IN3, HIGH);
   digitalWrite(IN4, LOW);
 
+ 
   digitalWrite(IN5, HIGH);
   digitalWrite(IN6, LOW);
   digitalWrite(IN7, HIGH);
   digitalWrite(IN8, LOW);
 
-  ledcWrite(M1_CH, speedM1);
-  ledcWrite(M2_CH, speedM2);
-  ledcWrite(M3_CH, speedM3);
-  ledcWrite(M4_CH, speedM4);
+  ledcWrite(ENA1, speedM1);
+  ledcWrite(ENB1, speedM2);
+  ledcWrite(ENA2, speedM3);
+  ledcWrite(ENB2, speedM4);
 }
 
+
 void backward(int speedM1, int speedM2, int speedM3, int speedM4) {
+
+  
   digitalWrite(IN1, LOW);
   digitalWrite(IN2, HIGH);
   digitalWrite(IN3, LOW);
   digitalWrite(IN4, HIGH);
 
+ 
   digitalWrite(IN5, LOW);
   digitalWrite(IN6, HIGH);
   digitalWrite(IN7, LOW);
   digitalWrite(IN8, HIGH);
 
-  ledcWrite(M1_CH, speedM1);
-  ledcWrite(M2_CH, speedM2);
-  ledcWrite(M3_CH, speedM3);
-  ledcWrite(M4_CH, speedM4);
+  ledcWrite(ENA1, speedM1);
+  ledcWrite(ENB1, speedM2);
+  ledcWrite(ENA2, speedM3);
+  ledcWrite(ENB2, speedM4);
 }
 
-void right(int speedM1, int speedM2, int speedM3, int speedM4) {
+
+void left(int speedM1, int speedM2, int speedM3, int speedM4) {
 
   digitalWrite(IN1, HIGH);   
   digitalWrite(IN2, LOW);
@@ -142,14 +151,14 @@ void right(int speedM1, int speedM2, int speedM3, int speedM4) {
   digitalWrite(IN7, HIGH);
   digitalWrite(IN8, LOW);
 
-  ledcWrite(M1_CH, speedM1);
-  ledcWrite(M2_CH, speedM2);
-  ledcWrite(M3_CH, speedM3);
-  ledcWrite(M4_CH, speedM4);
+  ledcWrite(ENA1, speedM1);
+  ledcWrite(ENB1, speedM2);
+  ledcWrite(ENA2, speedM3);
+  ledcWrite(ENB2, speedM4);
 }
 
 
-void left(int speedM1, int speedM2, int speedM3, int speedM4) {
+void right(int speedM1, int speedM2, int speedM3, int speedM4) {
  
   digitalWrite(IN1, LOW);
   digitalWrite(IN2, HIGH);
@@ -162,10 +171,10 @@ void left(int speedM1, int speedM2, int speedM3, int speedM4) {
   digitalWrite(IN7, LOW);
   digitalWrite(IN8, HIGH);
   
-  ledcWrite(M1_CH, speedM1);
-  ledcWrite(M2_CH, speedM2);
-  ledcWrite(M3_CH, speedM3);
-  ledcWrite(M4_CH, speedM4);
+  ledcWrite(ENA1, speedM1);
+  ledcWrite(ENB1, speedM2);
+  ledcWrite(ENA2, speedM3);
+  ledcWrite(ENB2, speedM4);
 }
 
 
@@ -272,7 +281,7 @@ server.on("/right", []() {
   server.send(200); 
 });
 server.on("/stop", []() { 
-  stopMotors(0,0,0,0); 
+  stopMotors();
   server.send(200); 
 });
 
@@ -295,15 +304,11 @@ void setup() {
   pinMode(IN7, OUTPUT);
   pinMode(IN8, OUTPUT);
     
-  ledcSetup(M1_CH, 1000, 8);
-  ledcSetup(M2_CH, 1000, 8);
-  ledcSetup(M3_CH, 1000, 8);
-  ledcSetup(M4_CH, 1000, 8);
+  ledcAttach(ENA1, 1000, 8);
+  ledcAttach(ENB1, 1000, 8);
+  ledcAttach(ENA2, 1000, 8);
+  ledcAttach(ENB2, 1000, 8);
 
-  ledcAttachPin(ENA1, M1_CH);
-  ledcAttachPin(ENB1, M2_CH);
-  ledcAttachPin(ENA2, M3_CH);
-  ledcAttachPin(ENB2, M4_CH);
 
 
   stopMotors();
