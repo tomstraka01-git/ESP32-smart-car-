@@ -11,7 +11,7 @@ plays a **buzzer warning when the battery is low**.
 
 ##  Features
 
--  Control the car using WiFi (no app needed!)
+-  Control the car using WiFi 
 -  Live battery voltage and percentage
 -  Low battery warning with buzzer
 -  Forward, Backward, Left, Right
@@ -75,9 +75,21 @@ plays a **buzzer warning when the battery is low**.
 |--------|-------------|
 | 26 | IN1 |
 | 27 | IN2 |
-| 14 | IN3 |
-| 12 | IN4 |
+| 32 | IN3 |
+| 33 | IN4 |
 
+| 19 | IN5 |
+| 21 | IN6 |
+| 22 | IN7 |
+| 23 | IN8 |
+
+| 25 | ENA1 |
+| 26 | ENB1 |
+| 17 | ENA2 |
+| 18 | ENB2 |
+
+
+ 
 ---
 
 ### Battery & Buzzer
