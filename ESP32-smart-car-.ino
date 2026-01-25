@@ -68,7 +68,7 @@ void readBatteryLevel() {
   
   buzzerON = (batteryPercent <= 10);
 
-  Serial.printf("Battery: %.2f V | %d %%\n", currentBatteryVoltage, batteryPercent);
+  Serial.printf(currentBatteryVoltage, batteryPercent);
 }
 
 void stopMotors() {
@@ -205,12 +205,32 @@ void setup() {
 
 
 void loop() {
+  static unsigned long lastBatteryRead = 0;
 
 
-  static unsigned long lastRead = 0;
-  if (millis() - lastRead >= 500) {
+  if (millis() - lastBatteryRead >= 500) {
     readBatteryLevel();
-    lastRead = millis();
+    lastBatteryRead = millis();
+
+
+    Serial.write((uint8_t)batteryPercent);
+  }
+
+
+  while (Serial.available() >= 2) { 
+    uint8_t command = Serial.read();
+    uint8_t speed = Serial.read();
+
+    int s1 = speed, s2 = speed, s3 = speed, s4 = speed;
+
+    switch (command) {
+      case 0: stopMotors(); break;
+      case 1: forward(s1,s2,s3,s4); break;
+      case 2: backward(s1,s2,s3,s4); break;
+      case 3: left(s1,s2,s3,s4); break;
+      case 4: right(s1,s2,s3,s4); break;
+      default: stopMotors(); break;
+    }
   }
 
 
