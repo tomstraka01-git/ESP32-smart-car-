@@ -1,10 +1,27 @@
+from flask import Flask, render_template, Response, jsonify, request
+import subprocess
 from ultralytics import YOLO
 import cv2
 import time
 import serial
+import threading
+import sys
+import socket
 
+ALLOWED_COMMANDS = {
+    "shutdown": "sudo shutdown now",
+    "reboot": "sudo reboot",
+    "update": "sudo apt update && sudo apt upgrade -y",
+    
+
+}
+
+app = Flask(__name__)
+cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
+
+if not cap.isOpened():
+    raise RuntimeError("Cannot open camera")
 model = YOLO("yolov8n_ncnn_model")
-cap = cv2.VideoCapture(0)
 wanted_area = 100000
 area_tolerance = 4000
 
@@ -20,6 +37,9 @@ ser = serial.Serial(
     baudrate=115200,
     timeout=1
 )
+stop_event = threading.Event() 
+ai_running = threading.Event()
+ai_running.set()
 def calculateForwardBackward(current_area, wanted_area, area_tolerance):
     error = wanted_area - current_area
     if abs(error) < area_tolerance:
@@ -32,7 +52,12 @@ def calculateForwardBackward(current_area, wanted_area, area_tolerance):
         return 1  , pwm   
     else:
         return 2, pwm   
-
+def find_free_port():
+    s = socket.socket()
+    s.bind(('', 0))
+    port = s.getsockname()[1]
+    s.close()
+    return port
 
 def send_command(command, speed):
    
@@ -78,85 +103,163 @@ def calculateSpeed(cx, cy, mx, my):
     return int(speedX), int(speedY), dirX, dirY
 
 
-while True:
-    ret, frame = cap.read()
-    if not ret:
-        break
+def generate_frames():
+    global frame_id, locked_box, prev_yolo_time, yolo_fps
 
-    h, w = frame.shape[:2]
-    mx = w // 2
-    my = h // 2
+    while not stop_event.is_set():
+        if not ai_running.is_set():
+            # AI is stopped, just send blank frame
+            import numpy as np
+            frame = 255 * np.ones((480, 640, 3), dtype=np.uint8)
+            cv2.putText(frame, "AI stopped", (50, 240),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+        else:
+            # AI is running, normal processing
+            frame_id += 1
+            ret, frame = cap.read()
+            if not ret:
+                continue
 
-    cv2.circle(frame, (mx, my), 5, (0, 0, 255), -1)
-    if ser.in_waiting > 0:
-        battery = ser.read()
-        print("Battery Percent:", battery[0])
+            h, w = frame.shape[:2]
+            mx = w // 2
+            my = h // 2
+            cv2.circle(frame, (mx, my), 5, (0, 0, 255), -1)
 
-    if frame_id % frame_skip == 0:
-        results = model(frame, classes=[0])
+            if ser.in_waiting > 0:
+                battery = ser.read()
+                print("Battery Percent:", battery[0])
 
-        detected = False
-        for r in results:
-            boxes = r.boxes
-            if boxes is not None and len(boxes) > 0:
-                locked_box = boxes[0]
-                detected = True
-                break
+            if frame_id % frame_skip == 0:
+                results = model(frame, classes=[0])
+                detected = False
+                for r in results:
+                    boxes = r.boxes
+                    if boxes is not None and len(boxes) > 0:
+                        locked_box = boxes[0]
+                        detected = True
+                        break
+                now = time.time()
+                yolo_fps = 1 / max(now - prev_yolo_time, 1e-6)
+                prev_yolo_time = now
+                if not detected:
+                    locked_box = None
 
-        now = time.time()
-        yolo_fps = 1 / max(now - prev_yolo_time, 1e-6)
-        prev_yolo_time = now
+            if locked_box is not None:
+                x1, y1, x2, y2 = map(int, locked_box.xyxy[0].tolist())
+                current_area = (x2 - x1) * (y2 - y1)
+                cx = (x1 + x2) // 2
+                cy = (y1 + y2) // 2
+                dir_forward_backward, pwmForward_backward = calculateForwardBackward(current_area, wanted_area, area_tolerance)
+                speedX, speedY, dirX, dirY = calculateSpeed(cx, cy, mx, my)
+                mapped_pwmX = map_pwm(speedX)
 
-        if not detected:
-            locked_box = None
+                if dirX == 3:
+                    send_command(3, mapped_pwmX)
+                elif dirX == 4:
+                    send_command(4, mapped_pwmX)
+                elif dirX == 0:
+                    if dir_forward_backward == 1:
+                        send_command(1, pwmForward_backward)
+                    elif dir_forward_backward == 2:
+                        send_command(2, pwmForward_backward)
+                    else:
+                        send_command(0, 0)
 
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                cv2.circle(frame, (cx, cy), 5, (0, 255, 0), -1)
+                cv2.line(frame, (cx, cy), (mx, my), (0, 255, 0), 2)
+                cv2.putText(frame, f"SpeedX: {speedX} ({dirX})", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+                cv2.putText(frame, f"SpeedY: {speedY} ({dirY})", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+                cv2.putText(frame, f"PwmX: {mapped_pwmX}", (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+                cv2.putText(frame, f"Current area: {current_area}", (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
 
-    if locked_box is not None:
-        x1, y1, x2, y2 = map(int, locked_box.xyxy[0].tolist())
-        current_area = (x2 - x1) * (y2 - y1)
-        cx = (x1 + x2) // 2
-        cy = (y1 + y2) // 2
-        dir_forward_backward, pwmForward_backward = calculateForwardBackward(current_area, wanted_area, area_tolerance)
-        speedX, speedY, dirX, dirY = calculateSpeed(cx, cy, mx, my)
-        mapped_pwmX = map_pwm(speedX)
-        if dirX == 3:
-            send_command(3, mapped_pwmX)
-        elif dirX == 4:
-            send_command(4, mapped_pwmX)
-        elif dirX == 0:
-            if dir_forward_backward == 1:
-                send_command(1, pwmForward_backward)
-            elif dir_forward_backward == 2:
-                send_command(2, pwmForward_backward)
-            else:
-                send_command(0, 0)
+        cv2.putText(frame, f"YOLO FPS: {yolo_fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
-                
+        retval, buffer = cv2.imencode('.jpg', frame)
+        frame_encoded = buffer.tobytes()
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame_encoded + b'\r\n')
+
         
-        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        cv2.circle(frame, (cx, cy), 5, (0, 255, 0), -1)
-        cv2.line(frame, (cx, cy), (mx, my), (0, 255, 0), 2)
-
-        cv2.putText(frame, f"SpeedX: {speedX} ({dirX})",
-            (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
-
-        cv2.putText(frame, f"SpeedY: {speedY} ({dirY})",
-            (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
-        cv2.putText(frame, f"PwmX: {mapped_pwmX}",
-            (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
-        cv2.putText(frame, f"Current area: {current_area}",
-            (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+        time.sleep(0.01)
+    
 
 
-    cv2.putText(frame, f"YOLO FPS: {yolo_fps:.1f}",
-                (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+received_text = ""  
 
-    cv2.imshow("YOLO on Raspberry Pi", frame)
+@app.route("/send_text", methods=["POST"])
+def send_text():
+    data = request.get_json()
+    if not data or "text" not in data:
+        return jsonify({"status": "error", "message": "No text provided"}), 400
 
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+    cmd = data["text"].strip().lower()
+    print("Received command:", cmd)
 
-    frame_id += 1
+    if cmd in ["quit"]:
+        stop_event.set() 
 
-cap.release()
-cv2.destroyAllWindows()
+      
+        if cap.isOpened():
+            cap.release()
+        cv2.destroyAllWindows()
+        if ser.is_open:
+            ser.close()
+
+       
+        shutdown_func = request.environ.get('werkzeug.server.shutdown')
+        if shutdown_func:
+            shutdown_func()
+        print("Server stopping...")
+
+        return jsonify({"status": "ok", "message": "Shutting down"}), 200
+    
+    elif cmd in ["stop python"]:
+        ai_running.clear()
+
+
+        return jsonify({"status": "ok", "message": "Python process stopped"}), 200    
+    elif cmd in ["start python"]:
+        ai_running.set()
+        return jsonify({"status": "ok", "message": "Python process started"}), 200  
+
+    
+
+
+    elif cmd in ALLOWED_COMMANDS:
+        try:
+            subprocess.run(ALLOWED_COMMANDS[cmd], shell=True, check=True)
+            return jsonify({"status": "ok", "command": cmd})
+        except subprocess.CalledProcessError as e:
+            return jsonify({"status": "error", "message": str(e)}), 500
+
+    else:
+        return jsonify({"status": "invalid command", "command": cmd}), 403
+
+
+
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+@app.route("/video_feed")
+def video_feed():
+    return Response(
+        generate_frames(),
+        mimetype='multipart/x-mixed-replace; boundary=frame'
+    )
+
+if __name__ == "__main__":
+    try:
+       
+
+        app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
+    finally:
+        stop_event.set()
+        if cap.isOpened():
+            cap.release()
+        cv2.destroyAllWindows()
+        if ser.is_open:
+            ser.close()
+        print("Shutdown done")
+
