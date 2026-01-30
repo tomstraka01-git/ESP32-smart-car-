@@ -5,6 +5,9 @@ import serial
 
 model = YOLO("yolov8n_ncnn_model")
 cap = cv2.VideoCapture(0)
+wanted_area = 100000
+area_tolerance = 4000
+
 
 frame_id = 0
 frame_skip = 2
@@ -17,6 +20,19 @@ ser = serial.Serial(
     baudrate=115200,
     timeout=1
 )
+def calculateForwardBackward(current_area, wanted_area, area_tolerance):
+    error = wanted_area - current_area
+    if abs(error) < area_tolerance:
+        return 0, 0
+    
+    speed = min(abs(error) / wanted_area * 100, 100)
+    pwm = map_pwm(speed)
+
+    if error > 0:
+        return 1  , pwm   
+    else:
+        return 2, pwm   
+
 
 def send_command(command, speed):
    
@@ -75,7 +91,7 @@ while True:
     if ser.in_waiting > 0:
         battery = ser.read()
         print("Battery Percent:", battery[0])
-    # --- YOLO only every N frames ---
+
     if frame_id % frame_skip == 0:
         results = model(frame, classes=[0])
 
@@ -87,7 +103,6 @@ while True:
                 detected = True
                 break
 
-        # YOLO FPS (real)
         now = time.time()
         yolo_fps = 1 / max(now - prev_yolo_time, 1e-6)
         prev_yolo_time = now
@@ -95,12 +110,13 @@ while True:
         if not detected:
             locked_box = None
 
-    # --- DRAW EVERY FRAME ---
+
     if locked_box is not None:
         x1, y1, x2, y2 = map(int, locked_box.xyxy[0].tolist())
+        current_area = (x2 - x1) * (y2 - y1)
         cx = (x1 + x2) // 2
         cy = (y1 + y2) // 2
-        
+        dir_forward_backward, pwmForward_backward = calculateForwardBackward(current_area, wanted_area, area_tolerance)
         speedX, speedY, dirX, dirY = calculateSpeed(cx, cy, mx, my)
         mapped_pwmX = map_pwm(speedX)
         if dirX == 3:
@@ -108,7 +124,14 @@ while True:
         elif dirX == 4:
             send_command(4, mapped_pwmX)
         elif dirX == 0:
-            send_command(0, mapped_pwmX)
+            if dir_forward_backward == 1:
+                send_command(1, pwmForward_backward)
+            elif dir_forward_backward == 2:
+                send_command(2, pwmForward_backward)
+            else:
+                send_command(0, 0)
+
+                
         
         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
         cv2.circle(frame, (cx, cy), 5, (0, 255, 0), -1)
@@ -121,6 +144,8 @@ while True:
             (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
         cv2.putText(frame, f"PwmX: {mapped_pwmX}",
             (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+        cv2.putText(frame, f"Current area: {current_area}",
+            (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
 
 
     cv2.putText(frame, f"YOLO FPS: {yolo_fps:.1f}",
