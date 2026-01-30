@@ -1,10 +1,3 @@
-#include <WiFi.h>
-#include <WebServer.h>
-
-
-const char* ap_ssid = "ESP32_CAR";
-const char* ap_password = "12345678";
-
 
 const int adcPin = 34;
 const int BuzzerPin = 13;
@@ -39,7 +32,6 @@ const int M4_CH = 3;
 
 int defaultSpeed = 128; 
 
-WebServer server(80);
 
 
 float currentBatteryVoltage = 0.0;
@@ -77,6 +69,7 @@ void readBatteryLevel() {
   buzzerON = (batteryPercent <= 10);
 
   Serial.printf("Battery: %.2f V | %d %%\n", currentBatteryVoltage, batteryPercent);
+
 }
 
 void stopMotors() {
@@ -179,115 +172,7 @@ void right(int speedM1, int speedM2, int speedM3, int speedM4) {
 
 
 
-void handleRoot() {
-  String html = R"rawliteral(
-<!DOCTYPE html>
-<html>
-<head>
-  <title>ESP32 Robot Control</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    body { font-family: Arial; text-align: center; background:#f2f2f2; }
-    button { font-size: 18px; padding: 12px 24px; margin: 5px; }
-    #warning { color:red; font-weight:bold; font-size:20px; display:none; }
-  </style>
-</head>
-<body>
 
-<h2>ESP32 Robot Control</h2>
-
-<h3>Battery</h3>
-<p>Voltage: <span id="voltage">--</span> V</p>
-<p>Charge: <span id="percent">--</span> %</p>
-<p id="warning">⚠ LOW BATTERY! PLEASE CHARGE ⚠</p>
-
-<hr>
-
-<button onclick="fetch('/forward')">Forward</button><br><br>
-<button onclick="fetch('/left')">Left</button>
-<button onclick="fetch('/right')">Right</button><br><br>
-<button onclick="fetch('/backward')">Backward</button><br><br>
-<button onclick="fetch('/stop')">Stop</button>
-
-<script>
-setInterval(() => {
-  fetch('/battery')
-    .then(r => r.json())
-    .then(data => {
-      document.getElementById('voltage').innerText = data.voltage.toFixed(2);
-      document.getElementById('percent').innerText = data.percent;
-      document.getElementById('warning').style.display =
-        data.low ? "block" : "none";
-    });
-}, 500);
-</script>
-<h3>Motor Speed</h3>
-<input type="range" min="0" max="255" value="128" id="speedSlider" oninput="updateSpeed(this.value)">
-<p>Speed: <span id="speedValue">128</span></p>
-
-<script>
-function updateSpeed(val) {
-  document.getElementById('speedValue').innerText = val;
-  fetch('/setSpeed?value=' + val); // send to ESP32
-}
-</script>
-
-
-</body>
-</html>
-)rawliteral";
-
-  server.send(200, "text/html", html);
-}
-
-
-void setupServer() {
-  
-  server.on("/", handleRoot);
-
-  server.on("/battery", []() {
-    String json = "{";
-    json += "\"voltage\":" + String(currentBatteryVoltage, 2) + ",";
-    json += "\"percent\":" + String(batteryPercent) + ",";
-    json += "\"low\":" + String(buzzerON ? "true" : "false");
-    json += "}";
-    server.send(200, "application/json", json);
-  });
-
-  server.on("/setSpeed", []() {
-    if(server.hasArg("value")) {
-      defaultSpeed = constrain(server.arg("value").toInt(), 0, 255);
-  }
-
-  server.send(200);
-});
-
-
-
-server.on("/forward", []() { 
-  forward(defaultSpeed, defaultSpeed, defaultSpeed, defaultSpeed); 
-  server.send(200); 
-});
-server.on("/backward", []() { 
-  backward(defaultSpeed, defaultSpeed, defaultSpeed, defaultSpeed); 
-  server.send(200); 
-});
-server.on("/left", []() { 
-  left(defaultSpeed, defaultSpeed, defaultSpeed, defaultSpeed); 
-  server.send(200); 
-});
-server.on("/right", []() { 
-  right(defaultSpeed, defaultSpeed, defaultSpeed, defaultSpeed); 
-  server.send(200); 
-});
-server.on("/stop", []() { 
-  stopMotors();
-  server.send(200); 
-});
-
-
-  server.begin();
-}
 
 
 void setup() {
@@ -316,23 +201,37 @@ void setup() {
   analogReadResolution(12);
   analogSetPinAttenuation(adcPin, ADC_11db);
 
-  WiFi.mode(WIFI_AP);
-  WiFi.softAP(ap_ssid, ap_password);
 
-  Serial.print("AP IP address: ");
-  Serial.println(WiFi.softAPIP());
-
-  setupServer();
 }
 
 
 void loop() {
-  server.handleClient();
+  static unsigned long lastBatteryRead = 0;
 
-  static unsigned long lastRead = 0;
-  if (millis() - lastRead >= 500) {
+
+  if (millis() - lastBatteryRead >= 500) {
     readBatteryLevel();
-    lastRead = millis();
+    lastBatteryRead = millis();
+
+
+    Serial.write((uint8_t)batteryPercent);
+  }
+
+
+  while (Serial.available() >= 2) { 
+    uint8_t command = Serial.read();
+    uint8_t speed = Serial.read();
+
+    int s1 = speed, s2 = speed, s3 = speed, s4 = speed;
+
+    switch (command) {
+      case 0: stopMotors(); break;
+      case 1: forward(s1,s2,s3,s4); break;
+      case 2: backward(s1,s2,s3,s4); break;
+      case 3: left(s1,s2,s3,s4); break;
+      case 4: right(s1,s2,s3,s4); break;
+      default: stopMotors(); break;
+    }
   }
 
 
