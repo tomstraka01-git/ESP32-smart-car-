@@ -1,100 +1,150 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;600&display=swap');
+:root {
+    --neon-blue: #00f2ff;
+    --dark-bg: #0a0c10;
+    --panel-bg: #161b22;
+    --text-dim: #8b949e;
+    --danger: #ff3e3e;
+}
 
 body {
-    background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
-    color: #f1f5f9;
-    font-family: 'Inter', sans-serif;
+    background-color: var(--dark-bg);
+    color: white;
+    font-family: 'JetBrains Mono', monospace;
     margin: 0;
     display: flex;
-    flex-direction: column;
-    align-items: center;
-    min-height: 100vh;
+    justify-content: center;
+    overflow-x: hidden;
+}
+
+.hud-container {
+    width: 95vw;
+    max-width: 1000px;
     padding: 20px;
 }
 
-#live_camera {
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 3px;
-    color: #38bdf8;
-    margin-bottom: 30px;
-    text-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
-}
-
-/* The Camera Feed Container */
-.video-wrapper {
-    position: relative;
-    border-radius: 20px;
-    padding: 10px;
-    background: rgba(255, 255, 255, 0.03);
-    backdrop-filter: blur(5px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-    margin-bottom: 30px;
-}
-
-img {
-    display: block;
-    border-radius: 12px;
-    max-width: 100%;
-    height: auto;
-    filter: brightness(1.1) contrast(1.1);
-}
-
-/* Stats Styling */
-.stats-bar {
+/* Header & Stats */
+.main-header {
     display: flex;
-    gap: 40px;
-    background: rgba(15, 23, 42, 0.8);
-    padding: 15px 40px;
-    border-radius: 100px;
-    border: 1px solid #334155;
-    margin-bottom: 30px;
-    font-family: 'JetBrains Mono', monospace;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid #30363d;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
 }
 
-#cpu_temp, #cpu_load {
-    font-size: 1.1rem;
-    color: #94a3b8;
+.live-indicator {
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
-#cpu_temp span, #cpu_load span {
-    color: #fb7185; /* Soft Red for metrics */
+#live_camera {
+    font-size: 1.2rem;
+    margin: 0;
+    letter-spacing: 2px;
+}
+
+.blink-dot {
+    width: 12px;
+    height: 12px;
+    background-color: var(--danger);
+    border-radius: 50%;
+    box-shadow: 0 0 10px var(--danger);
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; } 50% { opacity: 0.2; } 100% { opacity: 1; }
+}
+
+.system-stats {
+    display: flex;
+    gap: 20px;
+}
+
+.stat-box {
+    text-align: right;
+}
+
+.stat-box label {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+}
+
+.stat-box span {
+    color: var(--neon-blue);
     font-weight: bold;
 }
 
-/* Command Center */
-.controls {
+/* Video Viewport */
+.viewport {
+    position: relative;
     display: flex;
-    background: rgba(255, 255, 255, 0.05);
-    padding: 8px;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    justify-content: center;
+    margin-bottom: 30px;
+}
+
+.frame-border {
+    position: relative;
+    padding: 10px;
+    background: #000;
+    border: 1px solid #30363d;
+}
+
+.camera-stream {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border: 1px solid #444;
+}
+
+/* Decorative HUD Corners */
+[class^="corner-"] {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border: 3px solid var(--neon-blue);
+}
+.corner-tl { top: 0; left: 0; border-right: none; border-bottom: none; }
+.corner-tr { top: 0; right: 0; border-left: none; border-bottom: none; }
+.corner-bl { bottom: 0; left: 0; border-right: none; border-top: none; }
+.corner-br { bottom: 0; right: 0; border-left: none; border-top: none; }
+
+/* Command Center */
+.command-center {
+    background: var(--panel-bg);
+    padding: 20px;
+    border-radius: 4px;
+    border-left: 4px solid var(--neon-blue);
+}
+
+.input-wrapper {
+    display: flex;
+    gap: 10px;
 }
 
 #text_input1 {
-    background: transparent;
-    border: none;
-    color: white;
-    padding: 12px 20px;
-    font-size: 1rem;
-    width: 250px;
+    flex-grow: 1;
+    background: #000;
+    border: 1px solid #30363d;
+    color: var(--neon-blue);
+    padding: 12px;
+    font-family: inherit;
     outline: none;
 }
 
 #button1 {
-    background: #38bdf8;
-    color: #0f172a;
+    background: var(--neon-blue);
+    color: black;
     border: none;
     padding: 0 25px;
-    border-radius: 8px;
     font-weight: bold;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: 0.3s;
 }
 
 #button1:hover {
-    background: #7dd3fc;
-    box-shadow: 0 0 15px rgba(56, 189, 248, 0.6);
-    transform: translateY(-1px);
+    background: white;
+    box-shadow: 0 0 15px var(--neon-blue);
 }

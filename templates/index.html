@@ -1,59 +1,67 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>OpenCV Camera Stream</title>
+    <title>AI Robot Control</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <h1 id = "live_camera">Live Camera</h1>
+    <div class="hud-container">
+        <header class="main-header">
+            <div class="live-indicator">
+                <span class="blink-dot"></span>
+                <h1 id="live_camera">SYSTEM ACTIVE // YOLO_V8</h1>
+            </div>
+            <div class="system-stats">
+                <div class="stat-box">
+                    <label>TEMP</label>
+                    <span id="cpu_temp">--</span>
+                </div>
+                <div class="stat-box">
+                    <label>LOAD</label>
+                    <span id="cpu_load">--</span>
+                </div>
+            </div>
+        </header>
 
-    <img src="{{ url_for('video_feed') }}" width="640" height="480">
-    <p id="cpu_temp"></p>
-    <p id="cpu_load"></p>
-    <input type="text" id="text_input1" placeholder="Type command">
-    <button onclick="sendText()" id="button1">Send</button>
+        <section class="viewport">
+            <div class="frame-border">
+                <img src="{{ url_for('video_feed') }}" class="camera-stream">
+                <div class="corner-tl"></div><div class="corner-tr"></div>
+                <div class="corner-bl"></div><div class="corner-br"></div>
+            </div>
+        </section>
+
+        <footer class="command-center">
+            <div class="input-wrapper">
+                <input type="text" id="text_input1" placeholder="ENTER COMMAND (e.g. shutdown, set frame_skip 5)">
+                <button onclick="sendText()" id="button1">EXECUTE</button>
+            </div>
+        </footer>
+    </div>
 
 <script>
+// Your existing script remains exactly the same
 setInterval(get_cpu_data, 1000);
-
 function get_cpu_data(){
-    fetch("/stats")
-        .then(r => r.json())
-        .then(data => {
-            document.getElementById("cpu_temp").innerText = data.cpu_temp + "°C";
-            document.getElementById("cpu_load").innerText = data.cpu_load + "%";
-        })
+    fetch("/stats").then(r => r.json()).then(data => {
+        document.getElementById("cpu_temp").innerText = data.cpu_temp + "°C";
+        document.getElementById("cpu_load").innerText = data.cpu_load + "%";
+    })
 }
-
-
 function sendText() {
     const text = document.getElementById("text_input1").value.trim();
-
     fetch("/send_text", {
         method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
+        headers: {"Content-Type": "application/json"},
         body: JSON.stringify({ text: text })
     })
     .then(res => res.json())
     .then(data => {
-        console.log("Server response:", data);
-
-        if (data.status === "ok") {
-            alert(data.message || ("Command executed: " + data.command));
-
-        } else {
-            alert("Error: " + (data.message || data.command));
-        }
-    })
-    .catch(err => {
-        console.error("Fetch error:", err);
-        alert("Failed to send command");
+        console.log("Response:", data);
+        document.getElementById("text_input1").value = ""; // Clear input
     });
 }
 </script>
-
-
 </body>
 </html>

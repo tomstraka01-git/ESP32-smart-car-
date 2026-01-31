@@ -9,6 +9,8 @@ import sys
 import socket
 import psutil
 
+
+
 ALLOWED_COMMANDS = {
     "shutdown": "sudo shutdown now",
     "reboot": "sudo reboot",
@@ -110,10 +112,33 @@ def generate_frames():
         if not ai_running.is_set():
            
             import numpy as np
-            frame = 255 * np.ones((480, 640, 3), dtype=np.uint8)
-            cv2.putText(frame, "AI stopped", (40, 100),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-            send_command(0, 0)
+            frame = np.full((480, 640, 3), (15, 15, 20), dtype=np.uint8)
+
+
+            techy_blue = (255, 242, 0)
+
+            cv2.rectangle(frame, (20, 20), (620, 460), (40, 40, 40), 1)
+
+
+            cv2.putText(frame, "   AI PAUSED", (180, 240),
+            cv2.FONT_HERSHEY_SIMPLEX, 1, techy_blue, 2)
+
+            cv2.putText(frame, "WAITING FOR COMMAND...", (210, 280),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (100, 100, 100), 1)
+            retval, buffer = cv2.imencode('.jpg', frame)
+           
+            retval, buffer = cv2.imencode('.jpg', frame)
+            retval, buffer = cv2.imencode('.jpg', frame)
+            yield (b'--frame\r\n'
+                    b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+            time.sleep(0.5)
+            continue
+            
+          
+                
+
+            
+            
         else:
            
             frame_id += 1
