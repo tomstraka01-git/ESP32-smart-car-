@@ -2,18 +2,32 @@
 <html>
 <head>
     <title>OpenCV Camera Stream</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <h1>Live Camera</h1>
+    <h1 id = "live_camera">Live Camera</h1>
 
     <img src="{{ url_for('video_feed') }}" width="640" height="480">
-    
-    <input type="text" id="myText" placeholder="Type something">
-    <button onclick="sendText()">Send</button>
+    <p id="cpu_temp"></p>
+    <p id="cpu_load"></p>
+    <input type="text" id="text_input1" placeholder="Type command">
+    <button onclick="sendText()" id="button1">Send</button>
 
 <script>
+setInterval(get_cpu_data, 1000);
+
+function get_cpu_data(){
+    fetch("/stats")
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById("cpu_temp").innerText = data.cpu_temp + "°C";
+            document.getElementById("cpu_load").innerText = data.cpu_load + "%";
+        })
+}
+
+
 function sendText() {
-    const text = document.getElementById("myText").value.trim();
+    const text = document.getElementById("text_input1").value.trim();
 
     fetch("/send_text", {
         method: "POST",
@@ -27,7 +41,8 @@ function sendText() {
         console.log("Server response:", data);
 
         if (data.status === "ok") {
-            alert("Command executed: " + data.command);
+            alert(data.message || ("Command executed: " + data.command));
+
         } else {
             alert("Error: " + (data.message || data.command));
         }

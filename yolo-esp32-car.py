@@ -7,6 +7,7 @@ import serial
 import threading
 import sys
 import socket
+import psutil
 
 ALLOWED_COMMANDS = {
     "shutdown": "sudo shutdown now",
@@ -40,6 +41,7 @@ ser = serial.Serial(
 stop_event = threading.Event() 
 ai_running = threading.Event()
 ai_running.set()
+
 def calculateForwardBackward(current_area, wanted_area, area_tolerance):
     error = wanted_area - current_area
     if abs(error) < area_tolerance:
@@ -52,12 +54,7 @@ def calculateForwardBackward(current_area, wanted_area, area_tolerance):
         return 1  , pwm   
     else:
         return 2, pwm   
-def find_free_port():
-    s = socket.socket()
-    s.bind(('', 0))
-    port = s.getsockname()[1]
-    s.close()
-    return port
+
 
 def send_command(command, speed):
    
@@ -102,19 +99,23 @@ def calculateSpeed(cx, cy, mx, my):
     
     return int(speedX), int(speedY), dirX, dirY
 
+def get_cpu_temp():
+    with open("/sys/class/thermal/thermal_zone0/temp") as f:
+        return round(int(f.read()) / 1000, 1) 
 
 def generate_frames():
     global frame_id, locked_box, prev_yolo_time, yolo_fps
 
     while not stop_event.is_set():
         if not ai_running.is_set():
-            # AI is stopped, just send blank frame
+           
             import numpy as np
             frame = 255 * np.ones((480, 640, 3), dtype=np.uint8)
-            cv2.putText(frame, "AI stopped", (50, 240),
+            cv2.putText(frame, "AI stopped", (40, 100),
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            send_command(0, 0)
         else:
-            # AI is running, normal processing
+           
             frame_id += 1
             ret, frame = cap.read()
             if not ret:
@@ -173,7 +174,7 @@ def generate_frames():
                 cv2.putText(frame, f"PwmX: {mapped_pwmX}", (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
                 cv2.putText(frame, f"Current area: {current_area}", (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
 
-        cv2.putText(frame, f"YOLO FPS: {yolo_fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            cv2.putText(frame, f"YOLO FPS: {yolo_fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
         retval, buffer = cv2.imencode('.jpg', frame)
         frame_encoded = buffer.tobytes()
@@ -189,6 +190,7 @@ received_text = ""
 
 @app.route("/send_text", methods=["POST"])
 def send_text():
+    global frame_skip
     data = request.get_json()
     if not data or "text" not in data:
         return jsonify({"status": "error", "message": "No text provided"}), 400
@@ -203,6 +205,7 @@ def send_text():
         if cap.isOpened():
             cap.release()
         cv2.destroyAllWindows()
+        send_command(0, 0)
         if ser.is_open:
             ser.close()
 
@@ -211,14 +214,40 @@ def send_text():
         if shutdown_func:
             shutdown_func()
         print("Server stopping...")
-
+        subprocess.run("sudo shutdown now", shell=True)
         return jsonify({"status": "ok", "message": "Shutting down"}), 200
-    
+        
     elif cmd in ["stop python"]:
         ai_running.clear()
-
+        send_command(0, 0)
 
         return jsonify({"status": "ok", "message": "Python process stopped"}), 200    
+    
+    elif cmd.startswith("set frame_skip"):
+        parts = cmd.split()
+
+        if len(parts) != 3:
+            return jsonify({
+            "status": "error",
+            "message": "Usage: set frame_skip <number>"
+            }), 400
+
+        try:
+            value = int(parts[2])
+        except ValueError:
+            return jsonify({
+                "status": "error",
+                "message": "Frame skip must be an integer"
+            }), 400
+
+        frame_skip = value
+
+        return jsonify({
+            "status": "ok",
+            "message": f"frame_skip set to {frame_skip}"
+        }), 200
+
+        return jsonify({"status": "ok", "message": "Python process stopped"}), 200 
     elif cmd in ["start python"]:
         ai_running.set()
         return jsonify({"status": "ok", "message": "Python process started"}), 200  
@@ -229,8 +258,10 @@ def send_text():
     elif cmd in ALLOWED_COMMANDS:
         try:
             subprocess.run(ALLOWED_COMMANDS[cmd], shell=True, check=True)
+            send_command(0, 0)
             return jsonify({"status": "ok", "command": cmd})
         except subprocess.CalledProcessError as e:
+            send_command(0, 0)
             return jsonify({"status": "error", "message": str(e)}), 500
 
     else:
@@ -248,6 +279,12 @@ def video_feed():
         generate_frames(),
         mimetype='multipart/x-mixed-replace; boundary=frame'
     )
+@app.route("/stats")
+def stats():
+    temp =  get_cpu_temp()
+    load = psutil.cpu_percent()
+    return jsonify({"cpu_temp": temp,
+                    "cpu_load": load})
 
 if __name__ == "__main__":
     try:
@@ -259,6 +296,7 @@ if __name__ == "__main__":
         if cap.isOpened():
             cap.release()
         cv2.destroyAllWindows()
+        send_command(0, 0)
         if ser.is_open:
             ser.close()
         print("Shutdown done")
