@@ -68,7 +68,7 @@ void readBatteryLevel() {
   
   buzzerON = (batteryPercent <= 10);
 
-  Serial.printf("Battery: %.2f V | %d %%\n", currentBatteryVoltage, batteryPercent);
+  
 
 }
 
@@ -204,6 +204,12 @@ void setup() {
 
 }
 
+void sendBatterySerial() {
+  Serial.print("BAT,");
+  Serial.print(currentBatteryVoltage, 2);
+  Serial.print(",");
+  Serial.println(batteryPercent);
+}
 
 void loop() {
   static unsigned long lastBatteryRead = 0;
@@ -211,10 +217,12 @@ void loop() {
 
   if (millis() - lastBatteryRead >= 500) {
     readBatteryLevel();
+    sendBatterySerial();
     lastBatteryRead = millis();
+    
 
 
-    Serial.write((uint8_t)batteryPercent);
+    
   }
 
 
