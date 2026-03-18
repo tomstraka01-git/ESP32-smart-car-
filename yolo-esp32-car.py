@@ -56,6 +56,8 @@ def calculateForwardBackward(current_area, wanted_area, area_tolerance):
         return 1  , pwm   
     else:
         return 2, pwm   
+
+
 def read_battery():
     line = ser.readline().decode(errors='ignore').strip()
 
@@ -66,6 +68,9 @@ def read_battery():
         except ValueError:
             pass
     return None
+
+
+
 
 def send_command(command, speed):
    

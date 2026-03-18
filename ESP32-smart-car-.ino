@@ -30,9 +30,22 @@ const int M2_CH = 1;
 const int M3_CH = 2;
 const int M4_CH = 3;
 
+uint8_t currentCommand = 0;
+
 int defaultSpeed = 128; 
 
+// Motor smoothing variables
+uint8_t current_speed = 0;
+uint8_t speed_step = 5;
+uint8_t wanted_speed = 0;
+unsigned long lastTime = 0;
 
+// Speed variables
+
+int s1 = current_speed;
+int s2 = current_speed;
+int s3 = current_speed;
+int s4 = current_speed;
 
 float currentBatteryVoltage = 0.0;
 int batteryPercent = 0;
@@ -68,7 +81,7 @@ void readBatteryLevel() {
   
   buzzerON = (batteryPercent <= 10);
 
-  Serial.printf("Battery: %.2f V | %d %%\n", currentBatteryVoltage, batteryPercent);
+  
 
 }
 
@@ -204,36 +217,60 @@ void setup() {
 
 }
 
+void sendBatterySerial() {
+  Serial.print("BAT,");
+  Serial.print(currentBatteryVoltage, 2);
+  Serial.print(",");
+  Serial.println(batteryPercent);
+}
+
+
 
 void loop() {
   static unsigned long lastBatteryRead = 0;
 
+  // Smooth acceleration every 10 ms
+  if (millis() - lastTime >= 10) {
+      if (current_speed < wanted_speed)
+          current_speed += speed_step;
+      else if (current_speed > wanted_speed)
+          current_speed -= speed_step;
 
-  if (millis() - lastBatteryRead >= 500) {
-    readBatteryLevel();
-    lastBatteryRead = millis();
+      current_speed = constrain(current_speed, 0, 255); 
+      lastTime = millis();
+}
 
+  // Update speed variables for motors
+  s1 = current_speed;
+  s2 = current_speed;
+  s3 = current_speed;
+  s4 = current_speed;
 
-    Serial.write((uint8_t)batteryPercent);
-  }
-
-
+  // Read serial commands
   while (Serial.available() >= 2) { 
     uint8_t command = Serial.read();
-    uint8_t speed = Serial.read();
-
-    int s1 = speed, s2 = speed, s3 = speed, s4 = speed;
-
-    switch (command) {
-      case 0: stopMotors(); break;
-      case 1: forward(s1,s2,s3,s4); break;
-      case 2: backward(s1,s2,s3,s4); break;
-      case 3: left(s1,s2,s3,s4); break;
-      case 4: right(s1,s2,s3,s4); break;
-      default: stopMotors(); break;
-    }
+    uint8_t speed   = Serial.read();
+    currentCommand = command;
+    wanted_speed   = speed;
   }
 
+  // Execute motors based on current command
+  switch (currentCommand) {
+    case 0: stopMotors(); break;
+    case 1: forward(s1,s2,s3,s4); break;
+    case 2: backward(s1,s2,s3,s4); break;
+    case 3: left(s1,s2,s3,s4); break;
+    case 4: right(s1,s2,s3,s4); break;
+    default: stopMotors(); break;
+  }
 
+  // Read battery every 500 ms
+  if (millis() - lastBatteryRead >= 500) {
+    readBatteryLevel();
+    sendBatterySerial();
+    lastBatteryRead = millis();
+  }
+
+  // Update buzzer
   digitalWrite(BuzzerPin, buzzerON ? HIGH : LOW);
 }
