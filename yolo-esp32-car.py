@@ -24,7 +24,7 @@ cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
 
 if not cap.isOpened():
     raise RuntimeError("Cannot open camera")
-model = YOLO("yolov8n_ncnn_model")
+model = YOLO("/home/tomas-rpi/python-ai-esp32-car/ESP32-smart-car-/yolov8n_ncnn_model")
 wanted_area = 100000
 area_tolerance = 4000
 
@@ -56,7 +56,16 @@ def calculateForwardBackward(current_area, wanted_area, area_tolerance):
         return 1  , pwm   
     else:
         return 2, pwm   
+def read_battery():
+    line = ser.readline().decode(errors='ignore').strip()
 
+    if line.startswith("BAT"):
+        try:
+            _, voltage, percent = line.split(",")
+            return float(voltage), int(percent)
+        except ValueError:
+            pass
+    return None
 
 def send_command(command, speed):
    
@@ -151,9 +160,7 @@ def generate_frames():
             my = h // 2
             cv2.circle(frame, (mx, my), 5, (0, 0, 255), -1)
 
-            if ser.in_waiting > 0:
-                battery = ser.read()
-                print("Battery Percent:", battery[0])
+     
 
             if frame_id % frame_skip == 0:
                 results = model(frame, classes=[0])
