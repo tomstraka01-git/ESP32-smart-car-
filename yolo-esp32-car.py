@@ -69,11 +69,19 @@ def read_battery():
             pass
     return None
 
+last_command = None
+last_speed = None
 
+def send_command_safe(command, speed):
+    global last_command, last_speed
+    if command != last_command or speed != last_speed:
+        send_command(command, speed)
+        last_command = command
+        last_speed = speed
 
 
 def send_command(command, speed):
-   
+
     if not (0 <= command <= 4):
         raise ValueError("Command must be 0-4")
     if not (0 <= speed <= 255):
@@ -140,9 +148,6 @@ def generate_frames():
             cv2.putText(frame, "WAITING FOR COMMAND...", (210, 280),
             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (100, 100, 100), 1)
             retval, buffer = cv2.imencode('.jpg', frame)
-           
-            retval, buffer = cv2.imencode('.jpg', frame)
-            retval, buffer = cv2.imencode('.jpg', frame)
             yield (b'--frame\r\n'
                     b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
             time.sleep(0.5)
@@ -158,6 +163,9 @@ def generate_frames():
             frame_id += 1
             ret, frame = cap.read()
             if not ret:
+
+                print("Camera read failed")
+                time.sleep(0.1)
                 continue
 
             h, w = frame.shape[:2]
@@ -173,14 +181,17 @@ def generate_frames():
                 for r in results:
                     boxes = r.boxes
                     if boxes is not None and len(boxes) > 0:
-                        locked_box = boxes[0]
-                        detected = True
+                        if boxes.conf[0] > 0.5:
+                            locked_box = boxes[0]
+                            detected = True
                         break
+                if not detected:
+                    send_command_safe(0, 0)
+                    locked_box = None
                 now = time.time()
                 yolo_fps = 1 / max(now - prev_yolo_time, 1e-6)
                 prev_yolo_time = now
-                if not detected:
-                    locked_box = None
+           
 
             if locked_box is not None:
                 x1, y1, x2, y2 = map(int, locked_box.xyxy[0].tolist())
@@ -192,16 +203,16 @@ def generate_frames():
                 mapped_pwmX = map_pwm(speedX)
 
                 if dirX == 3:
-                    send_command(3, mapped_pwmX)
+                    send_command_safe(3, mapped_pwmX)
                 elif dirX == 4:
-                    send_command(4, mapped_pwmX)
+                    send_command_safe(4, mapped_pwmX)
                 elif dirX == 0:
                     if dir_forward_backward == 1:
-                        send_command(1, pwmForward_backward)
+                        send_command_safe(1, pwmForward_backward)
                     elif dir_forward_backward == 2:
-                        send_command(2, pwmForward_backward)
+                        send_command_safe(2, pwmForward_backward)
                     else:
-                        send_command(0, 0)
+                        send_command_safe(0, 0)
 
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 cv2.circle(frame, (cx, cy), 5, (0, 255, 0), -1)
@@ -242,7 +253,7 @@ def send_text():
         if cap.isOpened():
             cap.release()
         cv2.destroyAllWindows()
-        send_command(0, 0)
+        send_command_safe(0, 0)
         if ser.is_open:
             ser.close()
 
@@ -256,7 +267,7 @@ def send_text():
         
     elif cmd in ["stop python"]:
         ai_running.clear()
-        send_command(0, 0)
+        send_command_safe(0, 0)
 
         return jsonify({"status": "ok", "message": "Python process stopped"}), 200    
     
@@ -277,7 +288,7 @@ def send_text():
                 "message": "Frame skip must be an integer"
             }), 400
 
-        frame_skip = value
+        frame_skip = max(1, value)
 
         return jsonify({
             "status": "ok",
@@ -295,10 +306,10 @@ def send_text():
     elif cmd in ALLOWED_COMMANDS:
         try:
             subprocess.run(ALLOWED_COMMANDS[cmd], shell=True, check=True)
-            send_command(0, 0)
+            send_command_safe(0, 0)
             return jsonify({"status": "ok", "command": cmd})
         except subprocess.CalledProcessError as e:
-            send_command(0, 0)
+            send_command_safe(0, 0)
             return jsonify({"status": "error", "message": str(e)}), 500
 
     else:
@@ -318,10 +329,17 @@ def video_feed():
     )
 @app.route("/stats")
 def stats():
+    battery = read_battery()
+    if battery:
+        voltage, percent = battery
+    else:
+        voltage, percent = None, None
     temp =  get_cpu_temp()
     load = psutil.cpu_percent()
     return jsonify({"cpu_temp": temp,
-                    "cpu_load": load})
+                    "cpu_load": load,
+                    "battery_voltage": voltage,
+                    "battery_percent": percent})
 
 if __name__ == "__main__":
     try:
@@ -333,7 +351,7 @@ if __name__ == "__main__":
         if cap.isOpened():
             cap.release()
         cv2.destroyAllWindows()
-        send_command(0, 0)
+        send_command_safe(0, 0)
         if ser.is_open:
             ser.close()
         print("Shutdown done")

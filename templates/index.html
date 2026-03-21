@@ -21,6 +21,14 @@
                     <label>LOAD</label>
                     <span id="cpu_load">--</span>
                 </div>
+                <div class="stat-box">
+                    <label>VOLTAGE</label>
+                    <span id="battery_voltage">--</span>
+                </div>
+                <div class="stat-box">
+                    <label>PERCENT</label>
+                    <span id="battery_percent">--</span>
+                </div>
             </div>
         </header>
 
@@ -41,12 +49,14 @@
     </div>
 
 <script>
-// Your existing script remains exactly the same
+
 setInterval(get_cpu_data, 1000);
 function get_cpu_data(){
     fetch("/stats").then(r => r.json()).then(data => {
         document.getElementById("cpu_temp").innerText = data.cpu_temp + "°C";
         document.getElementById("cpu_load").innerText = data.cpu_load + "%";
+        document.getElementById("battery_voltage").innerText = data.battery_voltage + "V";
+        document.getElementById("battery_percent").innerText = data.battery_percent + "%";
     })
 }
 function sendText() {
@@ -59,7 +69,7 @@ function sendText() {
     .then(res => res.json())
     .then(data => {
         console.log("Response:", data);
-        document.getElementById("text_input1").value = ""; // Clear input
+        document.getElementById("text_input1").value = "";
     });
 }
 </script>
