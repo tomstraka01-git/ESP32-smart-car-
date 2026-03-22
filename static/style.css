@@ -22,7 +22,7 @@ body {
     padding: 20px;
 }
 
-/* Header & Stats */
+
 .main-header {
     display: flex;
     justify-content: space-between;
@@ -77,12 +77,72 @@ body {
     font-weight: bold;
 }
 
-/* Video Viewport */
+
 .viewport {
     position: relative;
     display: flex;
     justify-content: center;
     margin-bottom: 30px;
+}
+
+#toggleBtn {
+  padding: 10px 20px;
+  border: none;
+  cursor: pointer;
+  font-weight: bold;
+  color: white;
+  transition: 0.3s;
+}
+
+
+.drive-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.drive-controls div {
+    display: flex;
+    gap: 10px;
+}
+
+.drive-controls button {
+    width: 60px;
+    height: 60px;
+    font-size: 20px;
+    background: #111;
+    border: 1px solid #00f2ff;
+    color: #00f2ff;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.drive-controls button:hover {
+    background: #00f2ff;
+    color: black;
+    box-shadow: 0 0 10px #00f2ff;
+}
+
+.speed-control {
+    margin-top: 15px;
+    text-align: center;
+    color: #00f2ff;
+}
+
+#speedSlider {
+    width: 100%;
+    margin-top: 10px;
+    cursor: pointer;
+}
+.off {
+  background-color: #555;
+}
+
+.on {
+  background-color: #00f2ff;
+  color: black;
+  box-shadow: 0 0 10px #00f2ff;
 }
 
 .frame-border {
@@ -99,7 +159,7 @@ body {
     border: 1px solid #444;
 }
 
-/* Decorative HUD Corners */
+
 [class^="corner-"] {
     position: absolute;
     width: 20px;
@@ -111,7 +171,7 @@ body {
 .corner-bl { bottom: 0; left: 0; border-right: none; border-top: none; }
 .corner-br { bottom: 0; right: 0; border-left: none; border-top: none; }
 
-/* Command Center */
+
 .command-center {
     background: var(--panel-bg);
     padding: 20px;

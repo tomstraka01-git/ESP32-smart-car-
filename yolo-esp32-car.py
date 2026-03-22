@@ -21,6 +21,16 @@ ALLOWED_COMMANDS = {
 
 app = Flask(__name__)
 cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
+DIRECTION_MAP = {
+    "stop": 0,
+    "forward": 1,
+    "backward": 2,
+    "left": 3,
+    "right": 4
+}
+manual_mode = False  
+manual_speed = 0 # 0 to 255
+manual_command = 0
 
 if not cap.isOpened():
     raise RuntimeError("Cannot open camera")
@@ -59,15 +69,18 @@ def calculateForwardBackward(current_area, wanted_area, area_tolerance):
 
 
 def read_battery():
-    line = ser.readline().decode(errors='ignore').strip()
-
-    if line.startswith("BAT"):
-        try:
-            _, voltage, percent = line.split(",")
-            return float(voltage), int(percent)
-        except ValueError:
-            pass
-    return None
+    if not ser.is_open:
+        return None, None
+    try:
+        line = ser.readline().decode(errors='ignore').strip()
+        if line.startswith("BAT"):
+            parts = line.split(",")
+            if len(parts) == 3:
+                _, voltage, percent = parts
+                return float(voltage), int(percent)
+    except Exception as e:
+        print("Battery read error:", e)
+    return None, None
 
 last_command = None
 last_speed = None
@@ -160,69 +173,78 @@ def generate_frames():
             
         else:
            
-            frame_id += 1
-            ret, frame = cap.read()
-            if not ret:
+            if manual_mode:
+                ret, frame = cap.read()
+                if not ret:
 
-                print("Camera read failed")
-                time.sleep(0.1)
-                continue
+                    print("Camera read failed")
+                    time.sleep(0.1)
+                    continue
+                send_command_safe(manual_command, manual_speed)
+            else:
+                frame_id += 1
+                ret, frame = cap.read()
+                if not ret:
 
-            h, w = frame.shape[:2]
-            mx = w // 2
-            my = h // 2
-            cv2.circle(frame, (mx, my), 5, (0, 0, 255), -1)
+                    print("Camera read failed")
+                    time.sleep(0.1)
+                    continue
+
+                h, w = frame.shape[:2]
+                mx = w // 2
+                my = h // 2
+                cv2.circle(frame, (mx, my), 5, (0, 0, 255), -1)
 
      
 
-            if frame_id % frame_skip == 0:
-                results = model(frame, classes=[0])
-                detected = False
-                for r in results:
-                    boxes = r.boxes
-                    if boxes is not None and len(boxes) > 0:
-                        if boxes.conf[0] > 0.5:
-                            locked_box = boxes[0]
-                            detected = True
-                        break
-                if not detected:
-                    send_command_safe(0, 0)
-                    locked_box = None
-                now = time.time()
-                yolo_fps = 1 / max(now - prev_yolo_time, 1e-6)
-                prev_yolo_time = now
+                if frame_id % frame_skip == 0:
+                    results = model(frame, classes=[0])
+                    detected = False
+                    for r in results:
+                        boxes = r.boxes
+                        if boxes is not None and len(boxes) > 0:
+                            if boxes.conf[0] > 0.5:
+                                locked_box = boxes[0]
+                                detected = True
+                            break
+                    if not detected:
+                        send_command_safe(0, 0)
+                        locked_box = None
+                    now = time.time()
+                    yolo_fps = 1 / max(now - prev_yolo_time, 1e-6)
+                    prev_yolo_time = now
            
 
-            if locked_box is not None:
-                x1, y1, x2, y2 = map(int, locked_box.xyxy[0].tolist())
-                current_area = (x2 - x1) * (y2 - y1)
-                cx = (x1 + x2) // 2
-                cy = (y1 + y2) // 2
-                dir_forward_backward, pwmForward_backward = calculateForwardBackward(current_area, wanted_area, area_tolerance)
-                speedX, speedY, dirX, dirY = calculateSpeed(cx, cy, mx, my)
-                mapped_pwmX = map_pwm(speedX)
+                if locked_box is not None:
+                    x1, y1, x2, y2 = map(int, locked_box.xyxy[0].tolist())
+                    current_area = (x2 - x1) * (y2 - y1)
+                    cx = (x1 + x2) // 2
+                    cy = (y1 + y2) // 2
+                    dir_forward_backward, pwmForward_backward = calculateForwardBackward(current_area, wanted_area, area_tolerance)
+                    speedX, speedY, dirX, dirY = calculateSpeed(cx, cy, mx, my)
+                    mapped_pwmX = map_pwm(speedX)
 
-                if dirX == 3:
-                    send_command_safe(3, mapped_pwmX)
-                elif dirX == 4:
-                    send_command_safe(4, mapped_pwmX)
-                elif dirX == 0:
-                    if dir_forward_backward == 1:
-                        send_command_safe(1, pwmForward_backward)
-                    elif dir_forward_backward == 2:
-                        send_command_safe(2, pwmForward_backward)
-                    else:
-                        send_command_safe(0, 0)
+                    if dirX == 3:
+                        send_command_safe(3, mapped_pwmX)
+                    elif dirX == 4:
+                        send_command_safe(4, mapped_pwmX)
+                    elif dirX == 0:
+                        if dir_forward_backward == 1:
+                            send_command_safe(1, pwmForward_backward)
+                        elif dir_forward_backward == 2:
+                            send_command_safe(2, pwmForward_backward)
+                        else:
+                            send_command_safe(0, 0)
 
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                cv2.circle(frame, (cx, cy), 5, (0, 255, 0), -1)
-                cv2.line(frame, (cx, cy), (mx, my), (0, 255, 0), 2)
-                cv2.putText(frame, f"SpeedX: {speedX} ({dirX})", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
-                cv2.putText(frame, f"SpeedY: {speedY} ({dirY})", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
-                cv2.putText(frame, f"PwmX: {mapped_pwmX}", (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
-                cv2.putText(frame, f"Current area: {current_area}", (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                    cv2.circle(frame, (cx, cy), 5, (0, 255, 0), -1)
+                    cv2.line(frame, (cx, cy), (mx, my), (0, 255, 0), 2)
+                    cv2.putText(frame, f"SpeedX: {speedX} ({dirX})", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+                    cv2.putText(frame, f"SpeedY: {speedY} ({dirY})", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+                    cv2.putText(frame, f"PwmX: {mapped_pwmX}", (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+                    cv2.putText(frame, f"Current area: {current_area}", (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
 
-            cv2.putText(frame, f"YOLO FPS: {yolo_fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                    cv2.putText(frame, f"YOLO FPS: {yolo_fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
         retval, buffer = cv2.imencode('.jpg', frame)
         frame_encoded = buffer.tobytes()
@@ -327,19 +349,66 @@ def video_feed():
         generate_frames(),
         mimetype='multipart/x-mixed-replace; boundary=frame'
     )
+
 @app.route("/stats")
 def stats():
-    battery = read_battery()
-    if battery:
-        voltage, percent = battery
-    else:
-        voltage, percent = None, None
-    temp =  get_cpu_temp()
+    voltage, percent = read_battery()
+
+    temp = get_cpu_temp()
     load = psutil.cpu_percent()
-    return jsonify({"cpu_temp": temp,
-                    "cpu_load": load,
-                    "battery_voltage": voltage,
-                    "battery_percent": percent})
+
+    return jsonify({
+        "cpu_temp": temp,
+        "cpu_load": load,
+        "battery_voltage": voltage if voltage is not None else 0,
+        "battery_percent": percent if percent is not None else 0
+    })
+
+
+
+@app.route("/toggle", methods=["POST"])
+def toggle():
+    global manual_mode
+
+    data = request.get_json()
+    manual_mode = data.get("state", False)
+
+    
+
+    return jsonify({"status": "ok", "state": manual_mode})
+
+@app.route("/drive", methods=["POST"])
+def drive():
+    global manual_command, manual_speed
+
+    data = request.get_json()
+    if not data:
+        return jsonify({"status": "error", "message": "No data received"}), 400
+
+    direction_str = data.get("direction", "stop").lower()
+    speed = data.get("speed", 0)
+
+    if direction_str not in DIRECTION_MAP:
+        return jsonify({"status": "error", "message": "Invalid direction"}), 400
+
+    try:
+        speed = int(speed)
+        if not (0 <= speed <= 255):
+            raise ValueError
+    except ValueError:
+        return jsonify({"status": "error", "message": "Speed must be 0-255"}), 400
+
+    manual_command = DIRECTION_MAP[direction_str]
+    manual_speed = speed
+
+   
+    try:
+        send_command_safe(manual_command, manual_speed)
+        print(f"Drive command sent: {manual_command}, speed: {manual_speed}")
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+    return jsonify({"status": "ok", "direction": direction_str, "speed": speed})
 
 if __name__ == "__main__":
     try:

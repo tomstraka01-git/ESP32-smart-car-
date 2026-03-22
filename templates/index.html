@@ -6,72 +6,129 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="hud-container">
-        <header class="main-header">
-            <div class="live-indicator">
-                <span class="blink-dot"></span>
-                <h1 id="live_camera">SYSTEM ACTIVE // YOLO_V8</h1>
-            </div>
-            <div class="system-stats">
-                <div class="stat-box">
-                    <label>TEMP</label>
-                    <span id="cpu_temp">--</span>
-                </div>
-                <div class="stat-box">
-                    <label>LOAD</label>
-                    <span id="cpu_load">--</span>
-                </div>
-                <div class="stat-box">
-                    <label>VOLTAGE</label>
-                    <span id="battery_voltage">--</span>
-                </div>
-                <div class="stat-box">
-                    <label>PERCENT</label>
-                    <span id="battery_percent">--</span>
-                </div>
-            </div>
-        </header>
 
-        <section class="viewport">
-            <div class="frame-border">
-                <img src="{{ url_for('video_feed') }}" class="camera-stream">
-                <div class="corner-tl"></div><div class="corner-tr"></div>
-                <div class="corner-bl"></div><div class="corner-br"></div>
-            </div>
-        </section>
+<div class="hud-container">
 
-        <footer class="command-center">
-            <div class="input-wrapper">
-                <input type="text" id="text_input1" placeholder="ENTER COMMAND (e.g. shutdown, set frame_skip 5)">
-                <button onclick="sendText()" id="button1">EXECUTE</button>
+    <header class="main-header">
+        <div class="live-indicator">
+            <span class="blink-dot"></span>
+            <h1 id="live_camera">SYSTEM ACTIVE // YOLO_V8</h1>
+        </div>
+        <div class="system-stats">
+            <div class="stat-box">
+                <label>TEMP</label>
+                <span id="cpu_temp">--</span>
             </div>
-        </footer>
-    </div>
+            <div class="stat-box">
+                <label>LOAD</label>
+                <span id="cpu_load">--</span>
+            </div>
+            <div class="stat-box">
+                <label>VOLTAGE</label>
+                <span id="battery_voltage">--</span>
+            </div>
+            <div class="stat-box">
+                <label>PERCENT</label>
+                <span id="battery_percent">--</span>
+            </div>
+        </div>
+    </header>
+
+    <section class="viewport">
+        <div class="frame-border">
+            <img src="{{ url_for('video_feed') }}" class="camera-stream">
+            <div class="corner-tl"></div>
+            <div class="corner-tr"></div>
+            <div class="corner-bl"></div>
+            <div class="corner-br"></div>
+        </div>
+    </section>
+
+    <footer class="command-center">
+        <div class="input-wrapper">
+
+            <input type="text" id="text_input1" placeholder="ENTER COMMAND">
+            <button onclick="sendText()" id="button1">EXECUTE</button>
+
+            <button id="toggleBtn" class="off">OFF</button>
+
+            <div class="drive-controls">
+                <button onmousedown="sendCommand('forward')" onmouseup="sendCommand('stop')">↑</button>
+                <div>
+                    <button onmousedown="sendCommand('left')" onmouseup="sendCommand('stop')">←</button>
+                    <button onclick="sendCommand('stop')">■</button>
+                    <button onmousedown="sendCommand('right')" onmouseup="sendCommand('stop')">→</button>
+                </div>
+                <button onmousedown="sendCommand('backward')" onmouseup="sendCommand('stop')">↓</button>
+            </div>
+
+            <div class="speed-control">
+                <label>SPEED: <span id="speedValue">128</span></label>
+                <input type="range" id="speedSlider" min="0" max="255" value="128">
+            </div>
+
+        </div>
+    </footer>
+
+</div>
 
 <script>
+document.addEventListener("DOMContentLoaded", () => {
+    let speed = 128;
+    let manualMode = false;
 
-setInterval(get_cpu_data, 1000);
+    const slider = document.getElementById("speedSlider");
+    const speedDisplay = document.getElementById("speedValue");
+    const toggleBtn = document.getElementById("toggleBtn");
+
+    slider.addEventListener("input", () => {
+        speed = slider.value;
+        speedDisplay.textContent = speed;
+    });
+
+    toggleBtn.addEventListener("click", () => {
+        manualMode = toggleBtn.classList.toggle("on");
+        toggleBtn.classList.toggle("off", !manualMode);
+        toggleBtn.textContent = manualMode ? "ON" : "OFF";
+
+        fetch("/toggle", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ state: manualMode })
+        });
+    });
+
+    window.sendCommand = function(direction) {
+        if (!manualMode) return;
+        fetch("/drive", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ direction: direction, speed: speed })
+        });
+    };
+
+    window.sendText = function() {
+        const text = document.getElementById("text_input1").value.trim();
+        fetch("/send_text", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ text: text })
+        }).then(res => res.json()).then(data => {
+            document.getElementById("text_input1").value = "";
+        });
+    };
+});
+
 function get_cpu_data(){
     fetch("/stats").then(r => r.json()).then(data => {
         document.getElementById("cpu_temp").innerText = data.cpu_temp + "°C";
         document.getElementById("cpu_load").innerText = data.cpu_load + "%";
         document.getElementById("battery_voltage").innerText = data.battery_voltage + "V";
         document.getElementById("battery_percent").innerText = data.battery_percent + "%";
-    })
-}
-function sendText() {
-    const text = document.getElementById("text_input1").value.trim();
-    fetch("/send_text", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ text: text })
-    })
-    .then(res => res.json())
-    .then(data => {
-        console.log("Response:", data);
-        document.getElementById("text_input1").value = "";
     });
 }
+setInterval(get_cpu_data, 1000);
 </script>
+
 </body>
 </html>
